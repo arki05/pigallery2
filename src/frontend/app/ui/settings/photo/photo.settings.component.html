@@ -1,7 +1,8 @@
 <form #settingsForm="ngForm" class="form-horizontal">
   <div class="card mb-4">
     <h5 class="card-header">
-      {{Name}}</h5>
+      <span class="oi oi-{{icon}}"></span> {{Name}}
+    </h5>
     <div class="card-body">
       <div [hidden]="!error" class="alert alert-danger" role="alert"><strong>Error: </strong>{{error}}</div>
 
@@ -30,7 +31,7 @@
         [ngModel]="states.server.Converting.resolution"
         [options]="resolutions"
         [disabled]="!states.client.Converting.enabled.value"
-        required="true">
+        [required]="true">
       </app-settings-entry>
 
       <app-settings-entry
@@ -43,11 +44,11 @@
       </app-settings-entry>
 
 
-      <button class="btn btn-success float-right"
+      <button class="btn btn-success float-end"
               [disabled]="!settingsForm.form.valid || !changed || inProgress"
               (click)="save()" i18n>Save
       </button>
-      <button class="btn btn-secondary float-right"
+      <button class="btn btn-secondary float-end"
               [disabled]=" !changed || inProgress"
               (click)="reset()" i18n>Reset
       </button>

@@ -3,7 +3,7 @@ import {DBTestHelper} from '../../../DBTestHelper';
 import {SearchQueryDTO, SearchQueryTypes, TextSearch} from '../../../../../src/common/entities/SearchQueryDTO';
 import {IndexingManager} from '../../../../../src/backend/model/database/sql/IndexingManager';
 import {DirectoryBaseDTO, ParentDirectoryDTO, SubDirectoryDTO} from '../../../../../src/common/entities/DirectoryDTO';
-import {TestHelper} from './TestHelper';
+import {TestHelper} from '../../../../TestHelper';
 import {ObjectManagers} from '../../../../../src/backend/model/ObjectManagers';
 import {GalleryManager} from '../../../../../src/backend/model/database/sql/GalleryManager';
 import {Connection} from 'typeorm';
@@ -14,6 +14,8 @@ import {PreviewManager} from '../../../../../src/backend/model/database/sql/Prev
 import {Config} from '../../../../../src/common/config/private/Config';
 import {SortingMethods} from '../../../../../src/common/entities/SortingMethods';
 import {Utils} from '../../../../../src/common/Utils';
+import {SQLConnection} from '../../../../../src/backend/model/database/sql/SQLConnection';
+import {DirectoryEntity} from '../../../../../src/backend/model/database/sql/enitites/DirectoryEntity';
 
 const deepEqualInAnyOrder = require('deep-equal-in-any-order');
 const chai = require('chai');
@@ -134,6 +136,7 @@ describe('PreviewManager', (sqlHelper: DBTestHelper) => {
     delete tmpDir.directories;
     delete tmpDir.media;
     delete tmpDir.preview;
+    delete tmpDir.validPreview;
     delete tmpDir.metaFile;
     const ret = Utils.clone(m);
     delete (ret.directory as DirectoryBaseDTO).id;
@@ -151,29 +154,49 @@ describe('PreviewManager', (sqlHelper: DBTestHelper) => {
 
   after(async () => {
     await sqlHelper.clearDB();
+  });
+
+  afterEach(() => {
     Config.Server.Preview.SearchQuery = null;
     Config.Server.Preview.Sorting = [SortingMethods.descRating, SortingMethods.descDate];
+  });
+
+
+  it('should list directories without preview', async () => {
+    const pm = new PreviewManager();
+    const partialDir = (d: DirectoryBaseDTO) => {
+      return {id: d.id, name: d.name, path: d.path};
+    };
+    expect(await pm.getPartialDirsWithoutPreviews()).to.deep.equalInAnyOrder([partialDir(dir)]);
+    const conn = await SQLConnection.getConnection();
+
+    await conn.createQueryBuilder()
+      .update(DirectoryEntity).set({validPreview: false}).execute();
+
+    expect(await pm.getPartialDirsWithoutPreviews()).to.deep.equalInAnyOrder([dir, subDir, subDir2].map(d => partialDir(d)));
   });
 
   it('should sort directory preview', async () => {
     const pm = new PreviewManager();
     Config.Server.Preview.Sorting = [SortingMethods.descRating, SortingMethods.descDate];
-    expect(Utils.clone(await pm.getPreviewForDirectory(subDir))).to.deep.equalInAnyOrder(previewifyMedia(p2));
+    expect(Utils.clone(await pm.setAndGetPreviewForDirectory(subDir))).to.deep.equalInAnyOrder(previewifyMedia(p2));
     Config.Server.Preview.Sorting = [SortingMethods.descDate];
-    expect(Utils.clone(await pm.getPreviewForDirectory(subDir))).to.deep.equalInAnyOrder(previewifyMedia(pFaceLess));
+    expect(Utils.clone(await pm.setAndGetPreviewForDirectory(subDir))).to.deep.equalInAnyOrder(previewifyMedia(pFaceLess));
     Config.Server.Preview.Sorting = [SortingMethods.descRating];
-    expect(Utils.clone(await pm.getPreviewForDirectory(dir))).to.deep.equalInAnyOrder(previewifyMedia(p4));
+    expect(Utils.clone(await pm.setAndGetPreviewForDirectory(dir))).to.deep.equalInAnyOrder(previewifyMedia(p4));
+    Config.Server.Preview.Sorting = [SortingMethods.descName];
+    expect(Utils.clone(await pm.setAndGetPreviewForDirectory(dir))).to.deep.equalInAnyOrder(previewifyMedia(v));
   });
 
   it('should get preview for directory', async () => {
     const pm = new PreviewManager();
 
     Config.Server.Preview.SearchQuery = {type: SearchQueryTypes.any_text, text: 'Boba'} as TextSearch;
-    expect(Utils.clone(await pm.getPreviewForDirectory(subDir))).to.deep.equalInAnyOrder(previewifyMedia(p));
+    expect(Utils.clone(await pm.setAndGetPreviewForDirectory(subDir))).to.deep.equalInAnyOrder(previewifyMedia(p));
     Config.Server.Preview.SearchQuery = {type: SearchQueryTypes.any_text, text: 'Derem'} as TextSearch;
-    expect(Utils.clone(await pm.getPreviewForDirectory(subDir))).to.deep.equalInAnyOrder(previewifyMedia(p2));
-    expect(Utils.clone(await pm.getPreviewForDirectory(dir))).to.deep.equalInAnyOrder(previewifyMedia(p2));
-    expect(Utils.clone(await pm.getPreviewForDirectory(subDir2))).to.deep.equalInAnyOrder(previewifyMedia(p4));
+    expect(Utils.clone(await pm.setAndGetPreviewForDirectory(subDir))).to.deep.equalInAnyOrder(previewifyMedia(p2));
+    expect(Utils.clone(await pm.setAndGetPreviewForDirectory(dir))).to.deep.equalInAnyOrder(previewifyMedia(p2));
+    expect(Utils.clone(await pm.setAndGetPreviewForDirectory(subDir2))).to.deep.equalInAnyOrder(previewifyMedia(p4));
 
   });
 
@@ -200,6 +223,62 @@ describe('PreviewManager', (sqlHelper: DBTestHelper) => {
         text: 'sw'
       } as TextSearch
     }))).to.deep.equalInAnyOrder(previewifyMedia(p2));
+    // Having a preview search query that does not return valid result
+    Config.Server.Preview.SearchQuery = {type: SearchQueryTypes.any_text, text: 'wont find it'} as TextSearch;
+    expect(Utils.clone(await pm.getAlbumPreview({
+      searchQuery: {
+        type: SearchQueryTypes.any_text,
+        text: 'Derem'
+      } as TextSearch
+    }))).to.deep.equalInAnyOrder(previewifyMedia(p2));
+    // having a saved search that does not have any image
+    Config.Server.Preview.SearchQuery = {type: SearchQueryTypes.any_text, text: 'Derem'} as TextSearch;
+    expect(Utils.clone(await pm.getAlbumPreview({
+      searchQuery: {
+        type: SearchQueryTypes.any_text,
+        text: 'wont find it'
+      } as TextSearch
+    }))).to.deep.equal(null);
+  });
+
+  it('should invalidate and update preview', async () => {
+    const gm = new GalleryManagerTest();
+    const pm = new PreviewManager();
+    const conn = await SQLConnection.getConnection();
+
+    const selectDir = async () => {
+      return await conn.getRepository(DirectoryEntity).findOne({
+        where: {id: subDir.id},
+        join: {
+          alias: 'dir',
+          leftJoinAndSelect: {preview: 'dir.preview'}
+        }
+      });
+    };
+
+
+    let subdir = await selectDir();
+
+    expect(subdir.validPreview).to.equal(true);
+    expect(subdir.preview.id).to.equal(p2.id);
+
+    // new version should invalidate
+    await pm.onNewDataVersion(subDir as ParentDirectoryDTO);
+    subdir = await selectDir();
+    expect(subdir.validPreview).to.equal(false);
+    // during invalidation, we do not remove the previous preview (it's good to show at least some photo)
+    expect(subdir.preview.id).to.equal(p2.id);
+
+    await conn.createQueryBuilder()
+      .update(DirectoryEntity)
+      .set({validPreview: false, preview: null}).execute();
+    expect((await selectDir()).preview).to.equal(null);
+
+    const res = await gm.selectParentDir(conn, dir.name, dir.path);
+    await gm.fillParentDir(conn, res);
+    subdir = await selectDir();
+    expect(subdir.validPreview).to.equal(true);
+    expect(subdir.preview.id).to.equal(p2.id);
 
   });
 

@@ -1,10 +1,6 @@
-export const Experiments = {
-  loadPhotoMetadata: {
-    name: 'loadPhotoMetadata',
-    groups: {
-      exifr: 'exifr', exifrAll: 'exifrAll', exifrSelected: 'exifrSelected', exifreader: 'exifreader', exiftool: 'exiftool'
-    }
-  }
+export const Experiments:
+  { [key: string]: { name: string, groups: { [key: string]: string } } } = {
+
 };
 
 export const ActiveExperiments: { [key: string]: string } = {};

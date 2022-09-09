@@ -6,8 +6,7 @@ on:
       - experimental
   push:
     branches:
-      - master
-      - experimental
+      - '**'
     tags:
       - '*.*'
 
@@ -17,7 +16,7 @@ jobs:
 
     strategy:
       matrix:
-        node-version: [12.x, 13.x, 14.x]
+        node-version: [16.x]
 
     services:
        mariadb:
@@ -52,7 +51,7 @@ jobs:
         npm ci
         npm run build
 
-    - name: tslint
+    - name: lint
       run: |
         npm run lint
     - name: test
@@ -83,81 +82,91 @@ jobs:
         run: npm install --unsafe-perm
       -
         name: Create Release
-        run: npm run create-release -- --skip-opt-packages=ffmpeg,ffprobe --force-opt-packages
+        run: npm run create-release -- --skip-opt-packages=ffmpeg-static,ffprobe-static --force-opt-packages
       - uses: actions/upload-artifact@v2
         with:
           name: pigallery2-release
           path: release
-  build-docker:
-    runs-on: [ubuntu-latest]
-    needs: [create-release]
+  build-dockerx:
+    runs-on: [ ubuntu-latest ]
+    needs: [ create-release ]
     strategy:
       matrix:
-        container: [alpine, debian-stretch, debian-buster]
+        container: [alpine, debian-buster, debian-bullseye ]
+        include:
+          - container: alpine
+            platforms: linux/amd64,linux/arm64
+          - container: debian-buster
+            platforms: linux/amd64,linux/arm64,linux/arm/v7
+          - container: debian-bullseye
+            platforms: linux/amd64,linux/arm64,linux/arm/v7
 
     steps:
-      -
-        name: Set tag
+      - name: Set tag
         id: vars
         run: echo ::set-output name=tag::$(echo ${GITHUB_REF:10}) && echo ::set-output name=type::$(echo ${GITHUB_REF:5})
-      -
-        name: Checkout
+      - name: Checkout
         uses: actions/checkout@v2
-      -
-        uses: actions/download-artifact@v2
+      - uses: actions/download-artifact@v2
         with:
           name: pigallery2-release
           path: pigallery2-release
-      -
-        name: Set up QEMU
+      - name: Set up QEMU
         uses: docker/setup-qemu-action@v1
-      -
-        name: Set up Docker Buildx
+      - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v1
-      -
-        name: Login to DockerHub
+      - name: Login to DockerHub
         uses: docker/login-action@v1
         with:
           username: ${{ secrets.REGISTRY_USERNAME }}
           password: ${{ secrets.REGISTRY_PASSWORD }}
-      -
-        name: Test build on Pull request
-        if: ${{ startsWith(steps.vars.outputs.type , 'head') &&  github.event.issue.pull_request && github.ref == 'refs/heads/master' }}
+      - name: Build docker
         uses: docker/build-push-action@v2
         with:
           context: .
           file: docker/${{ matrix.container }}/Dockerfile.build
-          platforms: linux/amd64,linux/arm64,linux/arm/v7
-      -
-        name: Build experimental
+          platforms: ${{ matrix.platforms }}
+      - name: Push experimental
         if: ${{ github.ref == 'refs/heads/experimental' }}
         uses: docker/build-push-action@v2
         with:
           context: .
           file: docker/${{ matrix.container }}/Dockerfile.build
-          platforms: linux/amd64,linux/arm64,linux/arm/v7
+          platforms: ${{ matrix.platforms }}
           push: true
           tags: bpatrik/pigallery2:experimental-${{ matrix.container }}
-      -
-        name: Build and push nightly on new master commit
+      - name: Push nightly on new master commit
         if: ${{ startsWith(steps.vars.outputs.type , 'head') &&  !github.event.issue.pull_request && github.ref == 'refs/heads/master' }}
         uses: docker/build-push-action@v2
         with:
           context: .
           file: docker/${{ matrix.container }}/Dockerfile.build
-          platforms: linux/amd64,linux/arm64,linux/arm/v7
+          platforms: ${{ matrix.platforms }}
           push: true
           tags: bpatrik/pigallery2:nightly-${{ matrix.container }}
-      -
-        name: Build and push release on new Tag
-        if: ${{ startsWith(steps.vars.outputs.type , 'tag') &&  !github.event.issue.pull_request }}
+      - name: Push release on new Tag
+        if: ${{ startsWith(steps.vars.outputs.type , 'tag') &&  !github.event.issue.pull_request &&  matrix.container != 'debian-buster'}}
         uses: docker/build-push-action@v2
         with:
           context: .
           file: docker/${{ matrix.container }}/Dockerfile.build
-          platforms: linux/amd64,linux/arm64,linux/arm/v7
+          platforms: ${{ matrix.platforms }}
           push: true
           tags: |
             bpatrik/pigallery2:nightly-${{ matrix.container }}
-            bpatrik/pigallery2:${{ steps.vars.outputs.tag }}-${{ matrix.container == 'debian-buster' && '' || matrix.container }}
-            bpatrik/pigallery2:latest-${{ matrix.container == 'debian-buster' && '' || matrix.container }}
+            bpatrik/pigallery2:${{ steps.vars.outputs.tag }}-${{ matrix.container }}
+            bpatrik/pigallery2:latest-${{ matrix.container }}
+      - name: Push latest on new Tag
+        if: ${{ startsWith(steps.vars.outputs.type , 'tag') &&  !github.event.issue.pull_request &&  matrix.container == 'debian-buster'}}
+        uses: docker/build-push-action@v2
+        with:
+          context: .
+          file: docker/${{ matrix.container }}/Dockerfile.build
+          platforms: ${{ matrix.platforms }}
+          push: true
+          tags: |
+            bpatrik/pigallery2:nightly-${{ matrix.container }}
+            bpatrik/pigallery2:${{ steps.vars.outputs.tag }}-${{ matrix.container }}
+            bpatrik/pigallery2:latest-${{ matrix.container }}
+            bpatrik/pigallery2:${{ steps.vars.outputs.tag }}
+            bpatrik/pigallery2:latest

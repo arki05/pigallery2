@@ -1,13 +1,9 @@
-import {Injectable} from '@angular/core';
-import {backendText, backendTexts} from '../../../common/BackendTexts';
-import {DefaultsJobs} from '../../../common/entities/job/JobDTO';
+import { Injectable } from '@angular/core';
+import { backendText, backendTexts } from '../../../common/BackendTexts';
+import { DefaultsJobs } from '../../../common/entities/job/JobDTO';
 
 @Injectable()
 export class BackendtextService {
-
-
-  constructor() {
-  }
 
   public get(id: backendText): string {
     switch (id) {
@@ -45,6 +41,12 @@ export class BackendtextService {
         return $localize`Video Converting`;
       case DefaultsJobs['Temp Folder Cleaning']:
         return $localize`Temp Folder Cleaning`;
+      case DefaultsJobs['Preview Filling']:
+        return $localize`Preview Filling`;
+      case DefaultsJobs['Preview Reset']:
+        return $localize`Preview Reset`;
+      case DefaultsJobs['GPX Compression']:
+        return $localize`GPX Compression`;
       default:
         return DefaultsJobs[job as DefaultsJobs];
     }

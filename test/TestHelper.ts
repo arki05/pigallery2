@@ -3,12 +3,11 @@ import {
   GPSMetadataEntity,
   MediaDimensionEntity,
   PositionMetaDataEntity
-} from '../../../../../src/backend/model/database/sql/enitites/MediaEntity';
-import {PhotoEntity, PhotoMetadataEntity} from '../../../../../src/backend/model/database/sql/enitites/PhotoEntity';
-import {OrientationTypes} from 'ts-exif-parser';
-import {DirectoryEntity} from '../../../../../src/backend/model/database/sql/enitites/DirectoryEntity';
-import {VideoEntity, VideoMetadataEntity} from '../../../../../src/backend/model/database/sql/enitites/VideoEntity';
-import {MediaDimension, MediaDTO} from '../../../../../src/common/entities/MediaDTO';
+} from '../src/backend/model/database/sql/enitites/MediaEntity';
+import {PhotoEntity, PhotoMetadataEntity} from '../src/backend/model/database/sql/enitites/PhotoEntity';
+import {DirectoryEntity} from '../src/backend/model/database/sql/enitites/DirectoryEntity';
+import {VideoEntity, VideoMetadataEntity} from '../src/backend/model/database/sql/enitites/VideoEntity';
+import {MediaDimension, MediaDTO} from '../src/common/entities/MediaDTO';
 import {
   CameraMetadata,
   FaceRegion,
@@ -17,10 +16,10 @@ import {
   PhotoMetadata,
   PositionMetaData,
   PreviewPhotoDTO
-} from '../../../../../src/common/entities/PhotoDTO';
-import {DirectoryBaseDTO} from '../../../../../src/common/entities/DirectoryDTO';
-import {FileDTO} from '../../../../../src/common/entities/FileDTO';
-import {DiskMangerWorker} from '../../../../../src/backend/model/threading/DiskMangerWorker';
+} from '../src/common/entities/PhotoDTO';
+import {DirectoryBaseDTO, DirectoryPathDTO} from '../src/common/entities/DirectoryDTO';
+import {FileDTO} from '../src/common/entities/FileDTO';
+import {DiskMangerWorker} from '../src/backend/model/threading/DiskMangerWorker';
 
 export class TestHelper {
 
@@ -35,8 +34,8 @@ export class TestHelper {
     dir.directories = [];
     dir.metaFile = [];
     dir.media = [];
-    dir.lastModified = Date.now();
-    dir.lastScanned = Date.now();
+    dir.lastModified = 1656069687773;
+    dir.lastScanned = 1656069687773;
     // dir.parent = null;
     if (parent !== null) {
       dir.path = DiskMangerWorker.pathFromParent(parent);
@@ -45,12 +44,11 @@ export class TestHelper {
     return dir;
   }
 
-  public static getPhotoEntry(dir: DirectoryBaseDTO): PhotoEntity {
+  public static getPhotoEntry(dir: DirectoryPathDTO): PhotoEntity {
     const sd = new MediaDimensionEntity();
-    sd.height = 200;
+    sd.height = 400;
     sd.width = 200;
     const gps = new GPSMetadataEntity();
-    gps.altitude = 1;
     gps.latitude = 1;
     gps.longitude = 1;
     const pd = new PositionMetaDataEntity();
@@ -72,9 +70,8 @@ export class TestHelper {
     m.cameraData = cd;
     m.positionData = pd;
     m.size = sd;
-    m.creationDate = Date.now();
+    m.creationDate = 1656069387772;
     m.fileSize = 123456789;
-    m.orientation = OrientationTypes.TOP_LEFT;
     // m.rating = 0; no rating by default
 
     // TODO: remove when typeorm is fixed
@@ -85,23 +82,25 @@ export class TestHelper {
     const d = new PhotoEntity();
     d.name = 'test media.jpg';
     d.directory = (dir as any);
-    dir.media.push(d);
+    if ((dir as DirectoryBaseDTO).media) {
+      (dir as DirectoryBaseDTO).media.push(d);
+      (dir as DirectoryBaseDTO).mediaCount++;
+    }
     d.metadata = m;
-    dir.mediaCount++;
     return d;
   }
 
-  public static getVideoEntry(dir: DirectoryBaseDTO): VideoEntity {
+  public static getVideoEntry(dir: DirectoryPathDTO): VideoEntity {
     const sd = new MediaDimensionEntity();
     sd.height = 200;
-    sd.width = 200;
+    sd.width = 300;
 
     const m = new VideoMetadataEntity();
     m.caption = null;
     m.keywords = null;
     m.rating = null;
     m.size = sd;
-    m.creationDate = Date.now();
+    m.creationDate = 1656069387771;
     m.fileSize = 123456789;
 
     m.duration = 10000;
@@ -110,8 +109,24 @@ export class TestHelper {
 
     const d = new VideoEntity();
     d.name = 'test video.mp4';
-    dir.media.push(d);
+    d.directory = (dir as any);
+    if ((dir as DirectoryBaseDTO).media) {
+      (dir as DirectoryBaseDTO).media.push(d);
+      (dir as DirectoryBaseDTO).mediaCount++;
+    }
     d.metadata = m;
+    return d;
+  }
+
+  public static getGPXEntry(dir: DirectoryPathDTO): FileDTO {
+    const d: FileDTO = {
+      id: null,
+      name: 'saturdayRun.gpx',
+      directory: dir
+    };
+    if ((dir as DirectoryBaseDTO).metaFile) {
+      (dir as DirectoryBaseDTO).metaFile.push(d);
+    }
     return d;
   }
 
@@ -121,7 +136,7 @@ export class TestHelper {
     return p;
   }
 
-  public static getPhotoEntry1(dir: DirectoryBaseDTO): PhotoEntity {
+  public static getPhotoEntry1(dir: DirectoryPathDTO): PhotoEntity {
     const p = TestHelper.getPhotoEntry(dir);
 
     p.metadata.caption = 'Han Solo\'s dice';
@@ -131,7 +146,7 @@ export class TestHelper {
     p.name = 'sw1.jpg';
     p.metadata.positionData.GPSData.latitude = 10;
     p.metadata.positionData.GPSData.longitude = 10;
-    p.metadata.creationDate = Date.now() - 1000;
+    p.metadata.creationDate = 1656069387772 - 1000;
     p.metadata.rating = 1;
     p.metadata.size.height = 1000;
     p.metadata.size.width = 1000;
@@ -158,7 +173,7 @@ export class TestHelper {
     return p;
   }
 
-  public static getPhotoEntry2(dir: DirectoryBaseDTO): PhotoEntity {
+  public static getPhotoEntry2(dir: DirectoryPathDTO): PhotoEntity {
     const p = TestHelper.getPhotoEntry(dir);
 
     p.metadata.caption = 'Light saber';
@@ -169,7 +184,7 @@ export class TestHelper {
     p.name = 'sw2.jpg';
     p.metadata.positionData.GPSData.latitude = -10;
     p.metadata.positionData.GPSData.longitude = -10;
-    p.metadata.creationDate = Date.now() - 2000;
+    p.metadata.creationDate = 1656069387772 - 2000;
     p.metadata.rating = 2;
     p.metadata.size.height = 2000;
     p.metadata.size.width = 1000;
@@ -190,7 +205,7 @@ export class TestHelper {
     return p;
   }
 
-  public static getPhotoEntry3(dir: DirectoryBaseDTO): PhotoEntity {
+  public static getPhotoEntry3(dir: DirectoryPathDTO): PhotoEntity {
     const p = TestHelper.getPhotoEntry(dir);
 
     p.metadata.caption = 'Amber stone';
@@ -201,7 +216,7 @@ export class TestHelper {
     p.name = 'sw3.jpg';
     p.metadata.positionData.GPSData.latitude = 10;
     p.metadata.positionData.GPSData.longitude = 15;
-    p.metadata.creationDate = Date.now() - 3000;
+    p.metadata.creationDate = 1656069387772 - 3000;
     p.metadata.rating = 3;
     p.metadata.size.height = 1000;
     p.metadata.size.width = 2000;
@@ -218,7 +233,7 @@ export class TestHelper {
     return p;
   }
 
-  public static getPhotoEntry4(dir: DirectoryBaseDTO): PhotoEntity {
+  public static getPhotoEntry4(dir: DirectoryPathDTO): PhotoEntity {
     const p = TestHelper.getPhotoEntry(dir);
 
     p.metadata.caption = 'Millennium falcon';
@@ -229,7 +244,7 @@ export class TestHelper {
     p.name = 'sw4.jpg';
     p.metadata.positionData.GPSData.latitude = 15;
     p.metadata.positionData.GPSData.longitude = 10;
-    p.metadata.creationDate = Date.now() - 4000;
+    p.metadata.creationDate = 1656069387772 - 4000;
     p.metadata.size.height = 3000;
     p.metadata.size.width = 2000;
 
@@ -260,6 +275,7 @@ export class TestHelper {
       directories: [],
       metaFile: [],
       preview: null,
+      validPreview: false,
       media: [],
       lastModified: Date.now(),
       lastScanned: null,
@@ -305,7 +321,7 @@ export class TestHelper {
     return f;
   }
 
-  public static getRandomizedPhotoEntry(dir: DirectoryBaseDTO, forceStr: string = null, faces: number = 2): PhotoDTO {
+  public static getRandomizedPhotoEntry(dir: DirectoryBaseDTO, forceStr: string = null, faces = 2): PhotoDTO {
 
 
     const rndStr = (): string => {
@@ -322,7 +338,6 @@ export class TestHelper {
     };
 
     const gps: GPSMetadata = {
-      altitude: rndInt(1000),
       latitude: rndInt(1000),
       longitude: rndInt(1000)
     };
@@ -348,7 +363,6 @@ export class TestHelper {
       size: sd,
       creationDate: Date.now() + ++TestHelper.creationCounter,
       fileSize: rndInt(10000),
-      orientation: OrientationTypes.TOP_LEFT,
       caption: rndStr(),
       rating: rndInt(5) as any,
     };
@@ -358,9 +372,7 @@ export class TestHelper {
       id: null,
       name: rndStr() + '.jpg',
       directory: dir,
-      metadata: m,
-      readyThumbnails: [],
-      readyIcon: false
+      metadata: m
     };
 
     for (let i = 0; i < faces; i++) {

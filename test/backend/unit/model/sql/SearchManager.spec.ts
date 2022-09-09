@@ -23,11 +23,10 @@ import {
 } from '../../../../../src/common/entities/SearchQueryDTO';
 import {IndexingManager} from '../../../../../src/backend/model/database/sql/IndexingManager';
 import {DirectoryBaseDTO, ParentDirectoryDTO, SubDirectoryDTO} from '../../../../../src/common/entities/DirectoryDTO';
-import {TestHelper} from './TestHelper';
+import {TestHelper} from '../../../../TestHelper';
 import {ObjectManagers} from '../../../../../src/backend/model/ObjectManagers';
 import {GalleryManager} from '../../../../../src/backend/model/database/sql/GalleryManager';
 import {Connection} from 'typeorm';
-import {DirectoryEntity} from '../../../../../src/backend/model/database/sql/enitites/DirectoryEntity';
 import {GPSMetadata, PhotoDTO, PhotoMetadata} from '../../../../../src/common/entities/PhotoDTO';
 import {VideoDTO} from '../../../../../src/common/entities/VideoDTO';
 import {AutoCompleteItem} from '../../../../../src/common/entities/AutoCompleteItem';
@@ -167,23 +166,28 @@ describe('SearchManager', (sqlHelper: DBTestHelper) => {
     expect((await sm.autocomplete('arch', SearchQueryTypes.any_text))).eql([
       new AutoCompleteItem('Research City', SearchQueryTypes.position)]);
 
-    Config.Client.Search.AutoComplete.maxItemsPerCategory = 99999;
+    Config.Client.Search.AutoComplete.targetItemsPerCategory = 99999;
     expect((await sm.autocomplete('wa', SearchQueryTypes.any_text))).to.deep.equalInAnyOrder([
       new AutoCompleteItem('star wars', SearchQueryTypes.keyword),
       new AutoCompleteItem('Anakin Skywalker', SearchQueryTypes.person),
       new AutoCompleteItem('Luke Skywalker', SearchQueryTypes.person),
       new AutoCompleteItem('wars dir', SearchQueryTypes.directory)]);
 
-    Config.Client.Search.AutoComplete.maxItemsPerCategory = 1;
+    Config.Client.Search.AutoComplete.targetItemsPerCategory = 1;
     expect((await sm.autocomplete('a', SearchQueryTypes.any_text))).to.deep.equalInAnyOrder([
       new AutoCompleteItem('Ajan Kloss', SearchQueryTypes.position),
+      new AutoCompleteItem('Tipoca City', SearchQueryTypes.position),
       new AutoCompleteItem('Amber stone', SearchQueryTypes.caption),
+      new AutoCompleteItem('Millennium falcon', SearchQueryTypes.caption),
       new AutoCompleteItem('star wars', SearchQueryTypes.keyword),
       new AutoCompleteItem('Anakin Skywalker', SearchQueryTypes.person),
+      new AutoCompleteItem('Obivan Kenobi', SearchQueryTypes.person),
       new AutoCompleteItem('Castilon', SearchQueryTypes.position),
       new AutoCompleteItem('Devaron', SearchQueryTypes.position),
+      new AutoCompleteItem('Jedha', SearchQueryTypes.position),
+      new AutoCompleteItem('wars dir', SearchQueryTypes.directory),
       new AutoCompleteItem('The Phantom Menace', SearchQueryTypes.directory)]);
-    Config.Client.Search.AutoComplete.maxItemsPerCategory = 5;
+    Config.Client.Search.AutoComplete.targetItemsPerCategory = 5;
 
     expect((await sm.autocomplete('sw', SearchQueryTypes.any_text))).to.deep.equalInAnyOrder([
       new AutoCompleteItem('sw1.jpg', SearchQueryTypes.file_name),
@@ -206,6 +210,7 @@ describe('SearchManager', (sqlHelper: DBTestHelper) => {
     delete tmpDir.directories;
     delete tmpDir.media;
     delete tmpDir.preview;
+    delete tmpDir.validPreview;
     delete tmpDir.metaFile;
     const ret = Utils.clone(m);
     delete (ret.directory as DirectoryBaseDTO).lastScanned;
@@ -229,7 +234,6 @@ describe('SearchManager', (sqlHelper: DBTestHelper) => {
     const tmpMT = d.metaFile;
     delete d.directories;
     delete d.media;
-    delete d.preview;
     delete d.metaFile;
     const ret = Utils.clone(d);
     d.directories = tmpD;
@@ -1035,7 +1039,7 @@ describe('SearchManager', (sqlHelper: DBTestHelper) => {
         .to.deep.equalInAnyOrder(removeDir({
         searchQuery: query,
         directories: [],
-        media: [p, p2, p4, v],
+        media: [p, p2, p4],
         metaFile: [],
         resultOverflow: false
       } as SearchResultDTO));
@@ -1063,8 +1067,7 @@ describe('SearchManager', (sqlHelper: DBTestHelper) => {
       ObjectManagers.getInstance().LocationManager.getGPSData = async (): Promise<GPSMetadata> => {
         return {
           longitude: 10,
-          latitude: 10,
-          altitude: 0
+          latitude: 10
         };
       };
 
@@ -1187,7 +1190,7 @@ describe('SearchManager', (sqlHelper: DBTestHelper) => {
         }
       };
 
-      // tslint:disable-next-line:prefer-for-of
+      // eslint-disable-next-line @typescript-eslint/prefer-for-of
       for (let i = 1; i < alphabet.length / 2; ++i) {
         const query: SomeOfSearchQuery = {
           type: SearchQueryTypes.SOME_OF,
@@ -1230,6 +1233,15 @@ describe('SearchManager', (sqlHelper: DBTestHelper) => {
       Config.Client.Search.listDirectories = true;
       const sm = new SearchManager();
 
+      const cloned = Utils.clone(searchifyDir(subDir));
+      cloned.validPreview = true;
+      cloned.preview = {
+        directory: {
+          name: subDir.name,
+          path: subDir.path
+        },
+        name: pFaceLess.name
+      } as any;
       const query = {
         text: subDir.name,
         type: SearchQueryTypes.any_text
@@ -1237,7 +1249,7 @@ describe('SearchManager', (sqlHelper: DBTestHelper) => {
       expect(removeDir(await sm.search(query)))
         .to.deep.equalInAnyOrder(removeDir({
         searchQuery: query,
-        directories: [subDir],
+        directories: [cloned],
         media: [pFaceLess],
         metaFile: [],
         resultOverflow: false
@@ -1273,7 +1285,7 @@ describe('SearchManager', (sqlHelper: DBTestHelper) => {
       type: SearchQueryTypes.keyword
     } as TextSearch;
 
-    // tslint:disable-next-line
+    // eslint-disable-next-line
     expect(await sm.getRandomPhoto(query)).to.not.exist;
 
     query = ({

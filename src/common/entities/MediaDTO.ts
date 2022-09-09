@@ -1,26 +1,21 @@
-import {DirectoryPathDTO} from './DirectoryDTO';
-import {PhotoDTO} from './PhotoDTO';
-import {FileDTO} from './FileDTO';
-import {SupportedFormats} from '../SupportedFormats';
-
+import { DirectoryPathDTO } from './DirectoryDTO';
+import { PhotoDTO } from './PhotoDTO';
+import { FileDTO } from './FileDTO';
+import { SupportedFormats } from '../SupportedFormats';
 
 export interface MediaDTO extends FileDTO {
   id: number;
   name: string;
   directory: DirectoryPathDTO;
   metadata: MediaMetadata;
-  readyThumbnails: number[];
-  readyIcon: boolean;
-
+  missingThumbnails?: number;
 }
-
 
 export interface MediaMetadata {
   size: MediaDimension;
   creationDate: number;
   fileSize: number;
 }
-
 
 export interface MediaDimension {
   width: number;
@@ -29,14 +24,17 @@ export interface MediaDimension {
 
 export const MediaDTOUtils = {
   hasPositionData: (media: MediaDTO): boolean => {
-    return !!(media as PhotoDTO).metadata.positionData &&
-      !!((media as PhotoDTO).metadata.positionData.city ||
+    return (
+      !!(media as PhotoDTO).metadata.positionData &&
+      !!(
+        (media as PhotoDTO).metadata.positionData.city ||
         (media as PhotoDTO).metadata.positionData.state ||
         (media as PhotoDTO).metadata.positionData.country ||
         ((media as PhotoDTO).metadata.positionData.GPSData &&
-          (media as PhotoDTO).metadata.positionData.GPSData.altitude &&
           (media as PhotoDTO).metadata.positionData.GPSData.latitude &&
-          (media as PhotoDTO).metadata.positionData.GPSData.longitude));
+          (media as PhotoDTO).metadata.positionData.GPSData.longitude)
+      )
+    );
   },
   isPhoto: (media: FileDTO): boolean => {
     return !MediaDTOUtils.isVideo(media);
@@ -72,8 +70,7 @@ export const MediaDTOUtils = {
     return false;
   },
 
-
   calcAspectRatio: (photo: MediaDTO): number => {
     return photo.metadata.size.width / photo.metadata.size.height;
-  }
+  },
 };
